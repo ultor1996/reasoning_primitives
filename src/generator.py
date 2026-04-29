@@ -145,7 +145,7 @@ def main():
 
     # Resolve output directory
     if args.output_dir is None:
-        args.output_dir = "/home/sr/Desktop/code/hybrid_vs_transformer/data"
+        args.output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
     os.makedirs(args.output_dir, exist_ok=True)
 
     # Resolve output filename
