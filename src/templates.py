@@ -138,10 +138,16 @@ class TaskTemplate:
     # callable(difficulty, rng) -> sample dict
     _generator: Callable = field(repr=False)
 
-    def generate_sample(self, difficulty: int, rng: random.Random | None = None) -> dict:
+    def generate_sample(self, m: int, n: int, rng: random.Random | None = None) -> dict:
+        """
+        Generate one sample.
+
+        m : first axis of difficulty (particles / rows / bit-array size)
+        n : second axis of difficulty (collision steps / swaps / swap lines)
+        """
         if rng is None:
             rng = random.Random()
-        return self._generator(difficulty, rng)
+        return self._generator(m, n, rng)
 
 
 # ============================================================================
@@ -227,13 +233,13 @@ Format:
 """
 
 
-def _collisions_generator(difficulty: int, rng: random.Random) -> dict:
+def _collisions_generator(m: int, n: int, rng: random.Random) -> dict:
     """
-    difficulty = number of particles (= number of collision steps, n = m).
-    Minimum: 4 (need at least 4 distinct velocities for 4-option MC).
+    m = number of particles (minimum 4 for 4-option MC).
+    n = number of collision steps.
     """
-    num_particles = max(4, difficulty)
-    num_steps = num_particles  # n = m by default
+    num_particles = max(4, m)
+    num_steps = max(1, n)
 
     particles = _get_particle_names(num_particles)
     velocities = rng.sample(range(1, 1000), num_particles)
@@ -254,8 +260,7 @@ def _collisions_generator(difficulty: int, rng: random.Random) -> dict:
 
     options, correct_label = _build_mc_options(correct_value, velocities, rng)
     if options is None:
-        # regenerate with a different seed offset (shouldn't happen with ≥4 particles)
-        return _collisions_generator(difficulty, random.Random(rng.randint(0, 2**31)))
+        return _collisions_generator(m, n, random.Random(rng.randint(0, 2**31)))
 
     # Build prompt
     lines = [
@@ -286,6 +291,8 @@ def _collisions_generator(difficulty: int, rng: random.Random) -> dict:
         "metadata": {
             "num_particles": num_particles,
             "num_steps": num_steps,
+            "m": num_particles,
+            "n": num_steps,
             "question_particle": query,
             "correct_answer": correct_value,
         },
@@ -316,13 +323,14 @@ Format:
 }
 """
 
-def _astro_generator(difficulty: int, rng: random.Random, csv_path: str = _DEFAULT_CSV_PATH) -> dict:
+def _astro_generator(m: int, n: int, rng: random.Random, csv_path: str = _DEFAULT_CSV_PATH) -> dict:
     """
-    difficulty = number of table rows shown (= number of swap steps).
-    Minimum: 4.  Planets are sampled WITHOUT replacement from the CSV.
+    m = number of table rows shown (minimum 4).
+    n = number of swap steps.
+    Planets are sampled WITHOUT replacement from the CSV.
     """
-    num_rows = max(4, difficulty)
-    num_swaps = num_rows
+    num_rows = max(4, m)
+    num_swaps = max(1, n)
 
     planets = _load_planets(csv_path)
     if len(planets) < num_rows:
@@ -362,7 +370,7 @@ def _astro_generator(difficulty: int, rng: random.Random, csv_path: str = _DEFAU
     all_retrieve = retrieve_values
     options, correct_label = _build_mc_options(correct_retrieve, all_retrieve, rng)
     if options is None:
-        return _astro_generator(difficulty, random.Random(rng.randint(0, 2**31)), csv_path)
+        return _astro_generator(m, n, random.Random(rng.randint(0, 2**31)), csv_path)
 
     # Markdown table header — use all available CSV columns
     cols = ["Planet", "Host Star", "Orbital Period (days)", "Planet Radius (Earth radii)",
@@ -407,6 +415,8 @@ def _astro_generator(difficulty: int, rng: random.Random, csv_path: str = _DEFAU
         "metadata": {
             "num_rows": num_rows,
             "num_swaps": num_swaps,
+            "m": num_rows,
+            "n": num_swaps,
             "query_variable": query_var,
         },
     }
@@ -461,15 +471,15 @@ _SBR_NUM_VARS = 5
 _SBR_VAR_NAMES = ["a", "b", "c", "d", "e"]
 
 
-def _sbr_generator(difficulty: int, rng: random.Random) -> dict:
+def _sbr_generator(m: int, n: int, rng: random.Random) -> dict:
     """
     State-Based Recall task (Merrill et al. 2026, Figure 5).
 
-    difficulty = n = m  (number of swaps = bit-array size).
-    Minimum: 4 (need at least 4 distinct pointer values for safety).
+    m = bit-array size (minimum 5 to hold 5 distinct pointer values).
+    n = number of swap lines.
     """
-    n = max(4, difficulty)   # number of swap lines
-    m = n                    # bit-array size  (n = m as in paper)
+    m = max(5, m)
+    n = max(1, n)
 
     # --- bit array ---
     bits = [rng.randint(0, 1) for _ in range(m)]
@@ -587,8 +597,8 @@ def get_task(name: str, csv_path: str | None = None) -> TaskTemplate:
     # For planet tasks, wrap the generator to inject csv_path
     if name == "astro" and csv_path is not None:
         base_gen = template._generator
-        def _gen_with_path(difficulty, rng, _gen=base_gen, _path=csv_path):
-            return _gen(difficulty, rng, csv_path=_path)
+        def _gen_with_path(m, n, rng, _gen=base_gen, _path=csv_path):
+            return _gen(m, n, rng, csv_path=_path)
         import copy
         template = copy.replace(template, _generator=_gen_with_path)
 
