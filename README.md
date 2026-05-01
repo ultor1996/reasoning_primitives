@@ -237,31 +237,6 @@ python eval.py --input results/sbr_hybrid_think.json
 # 4. Plot
 python paper_plots.py --inputs scores/*_eval.json --output-dir figures/
 ```
-
-### Dyck end-to-end example
-
-```bash
-# 1. Generate — cartesian over stack depth × sequence length
-python generator.py \
-    --task dyck \
-    --n-samples 100 \
-    --m 1 2 4 8 16 \
-    --n 8 16 32 64 128 \
-    --mode cartesian
-
-# 2. Run inference
-sbatch inference.sh \
-    --input  /path/to/data/dyck_m1_2_4_8_16_n8_16_32_64_128_s100.json \
-    --model  allenai/OLMo-3-7B-Instruct \
-    --output /path/to/results/dyck_olmo3_instruct.json
-
-# 3. Evaluate
-python eval.py --input results/dyck_olmo3_instruct.json
-
-# 4. Plot
-python paper_plots.py --inputs scores/*_eval.json --output-dir figures/
-```
-
 ---
 
 ## Adding a new task
