@@ -91,6 +91,7 @@ def run_inference(
     model_name: str,
     batch_size: int = 8,
     max_model_len: int = 16_000,
+    max_tokens: int = 512,
     tensor_parallel: int = 1,
 ) -> list[dict]:
     """
@@ -106,12 +107,16 @@ def run_inference(
         max_model_len=max_model_len,
     )
 
-    # Sampling: use model defaults (None == whatever generation_config.json says)
+    # Read temperature from model's generation_config.json (vLLM default behaviour)
+    default_sampling_params = model.llm_engine.model_config.get_diff_sampling_param()
+    temperature = default_sampling_params.get("temperature", 1.0)
+
     sampling_params = SamplingParams(
-        temperature=None,
-        max_tokens=512,
-        stop=[tokenizer.eos_token] if tokenizer.eos_token else [],
+        temperature=temperature,
+        max_tokens=max_tokens,
+        stop_token_ids=[tokenizer.eos_token_id] if tokenizer.eos_token_id else [],
     )
+    print(f"Using sampling parameters: {sampling_params}")
 
     # Build all prompts up front
     prompts = [build_prompt(tokenizer, s, model_name) for s in samples]
@@ -159,6 +164,8 @@ def main():
     parser.add_argument("--output", default=None,  help="Output JSON path.")
     parser.add_argument("--batch-size",      type=int, default=8)
     parser.add_argument("--max-model-len",   type=int, default=16_000)
+    parser.add_argument("--max-tokens",      type=int, default=512,
+                        help="Max tokens the model generates per sample (default: 512).")
     parser.add_argument("--tensor-parallel", type=int, default=1)
     args = parser.parse_args()
 
@@ -180,6 +187,7 @@ def main():
         model_name=args.model,
         batch_size=args.batch_size,
         max_model_len=args.max_model_len,
+        max_tokens=args.max_tokens,
         tensor_parallel=args.tensor_parallel,
     )
 
