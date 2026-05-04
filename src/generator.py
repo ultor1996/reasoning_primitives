@@ -16,6 +16,7 @@ m and n meaning per task:
   collisions    : m = number of particles,  n = number of collision steps
   astro         : m = number of table rows, n = number of swaps
   olmo_original : m = bit-array size,       n = number of swap lines
+  dag_arithmetic: m = variables per layer,  n = number of layers (depth)
 
 A sample is generated for every (m, n) pair in the cartesian product of
 --m and --n values.  n_samples independent prompts are generated per pair.
@@ -99,7 +100,7 @@ def main():
         "--task",
         required=True,
         choices=list_tasks(),
-        help="Task to generate (collisions, astro, olmo_original).",
+        help="Task to generate (collisions, astro, olmo_original, dyck, dag_arithmetic).",
     )
     parser.add_argument(
         "--n-samples",

@@ -12,6 +12,7 @@ A pipeline for generating, running, and evaluating LLM benchmarks focused on **s
 | `astro` | Track variable→planet mappings through swap operations over an exoplanet table | number of table rows | number of swaps |
 | `olmo_original` | State-based recall from the OLMo Hybrid paper: track 5 pointer variables through swaps, then index into a bit array | bit-array size | number of swap lines |
 | `dyck` | Track a bracket stack through a Dyck expression and identify the correct closing token at a masked position | stack depth at query position | sequence length |
+| `dag_arithmetic` | Trace cascading addition/subtraction computations through a DAG with cross-layer dependencies and report the final value of a queried variable | variables per layer (width) | number of layers (depth) |
 
 All tasks output **4-option multiple choice (A/B/C/D)**.
 
@@ -124,6 +125,14 @@ python generator.py \
     --m 1 2 4 8 16 \
     --n 8 16 32 64 128 \
     --mode cartesian
+
+# dag_arithmetic — cartesian mode recommended to separate width vs depth
+python generator.py \
+    --task dag_arithmetic \
+    --n-samples 100 \
+    --m 2 4 8 16 \
+    --n 2 4 8 16 \
+    --mode cartesian
 ```
 
 > **Note for `dyck`:** `m` is stack depth at the query position and `n` is sequence
@@ -133,11 +142,18 @@ python generator.py \
 > Cartesian mode is recommended over zip so stack depth and sequence length can be
 > varied independently.
 
+> **Note for `dag_arithmetic`:** `m` is the number of variables per layer (width) and
+> `n` is the number of computation layers (depth). Operations are limited to `+` and `-`.
+> Cartesian mode is recommended because width and depth are independent difficulty axes.
+> With 40% probability, nodes reference variables from non-adjacent earlier layers,
+> meaning a computation in layer 9 may depend on a value from layer 2 — the model must
+> hold many intermediate values in memory simultaneously rather than just the previous layer.
+
 **All options:**
 
 | Flag | Default | Description |
 |---|---|---|
-| `--task` | required | `collisions`, `astro`, `olmo_original`, or `dyck` |
+| `--task` | required | `collisions`, `astro`, `olmo_original`, `dyck`, or `dag_arithmetic` |
 | `--n-samples` | `100` | Samples per `(m, n)` pair |
 | `--m` | `4 8 16` | Space-separated list of `m` values |
 | `--n` | same as `--m` | Space-separated list of `n` values (defaults to `--m` if omitted) |
@@ -256,8 +272,11 @@ python paper_plots.py \
 ```
 
 Produces two figures in both `.pdf` and `.png`:
-- `accuracy_vs_n_line` — accuracy per model across difficulty levels
-- `pwa_vs_n_line` — parsed weighted accuracy per model across difficulty levels
+- `accuracy_line_<task>_<models>` — accuracy per model across difficulty levels
+- `pwa_line_<task>_<models>` — parsed weighted accuracy per model across difficulty levels
+
+The task name and model names are automatically detected from the eval JSON files and
+included in the output filenames.
 
 **All plot options:**
 
@@ -267,6 +286,7 @@ Produces two figures in both `.pdf` and `.png`:
 | `--output-dir` | `figures/` | Directory to write figures |
 | `--title` | `""` | Optional figure title suffix |
 | `--max-m` | `None` | Cap plots at this `m` value — useful when models have different context limits and you want a fair comparison (e.g. `--max-m 2048` excludes larger difficulties) |
+| `--task` | auto-detected | Override the task name in output filenames |
 
 > **Example use case for `--max-m`:** If instruct models were run on data up to `m=2500`
 > but thinking models can only fit up to `m=2048` within their context window, use
@@ -342,6 +362,33 @@ sbatch inference.sh \
 
 # 4. Evaluate
 python eval.py --input results/dyck_olmo3_instruct.json
+
+# 5. Plot
+python paper_plots.py --inputs scores/*_eval.json --output-dir figures/
+```
+
+### DAG arithmetic end-to-end example
+
+```bash
+# 1. Generate — cartesian over width × depth
+python generator.py \
+    --task dag_arithmetic \
+    --n-samples 100 \
+    --m 2 4 8 16 \
+    --n 2 4 8 16 \
+    --mode cartesian
+
+# 2. Check token lengths
+python check_token_lengths.py --task dag_arithmetic
+
+# 3. Run inference
+sbatch inference.sh \
+    --input  /path/to/data/dag_arithmetic_m2_4_8_16_n2_4_8_16_s100.json \
+    --model  allenai/OLMo-3-7B-Instruct \
+    --output /path/to/results/dag_arithmetic_olmo3_instruct.json
+
+# 4. Evaluate
+python eval.py --input results/dag_arithmetic_olmo3_instruct.json
 
 # 5. Plot
 python paper_plots.py --inputs scores/*_eval.json --output-dir figures/

@@ -713,6 +713,167 @@ def _dyck_generator(m: int, n: int, rng: random.Random) -> dict:
             "sequence": "".join(sequence),
         },
     }
+# Add this block right before the Registry section:
+
+# ============================================================================
+# Task: dag_arithmetic
+# ============================================================================
+
+_DAG_SYSTEM_PROMPT = """You are a strict arithmetic computation engine.
+
+Task:
+- You are given a set of input variables with integer values.
+- You are given a sequence of computation steps organized in layers.
+- Each step computes a new variable from one or two previous variables
+  using addition or subtraction only.
+- You must trace every computation in order and track all variable values.
+
+Rules:
+- Apply every step in order. Do NOT skip any.
+- Use integer arithmetic throughout.
+- After all steps, report the value of the queried variable.
+
+Output requirements:
+- Return EXACTLY one JSON object, no other text.
+
+Format:
+{
+  "answer": "A | B | C | D"
+}
+"""
+
+_DAG_OPS = ["+", "-"]
+
+
+def _dag_generator(m: int, n: int, rng: random.Random) -> dict:
+    """
+    DAG arithmetic task with cross-layer dependencies.
+
+    m = number of variables per layer (width, minimum 2).
+    n = number of computation layers (depth, minimum 2).
+    """
+    m = max(2, m)
+    n = max(2, n)
+
+    def var_name(layer: int, idx: int) -> str:
+        if layer == 0:
+            name = ""
+            x = idx
+            while True:
+                name = chr(ord("a") + (x % 26)) + name
+                x = x // 26 - 1
+                if x < 0:
+                    break
+            return name
+        return f"v{layer}_{idx}"
+
+    # Layer 0: input variables
+    layer_vars = [[var_name(0, i) for i in range(m)]]
+    values = {v: rng.randint(1, 20) for v in layer_vars[0]}
+
+    all_steps = []
+
+    for layer in range(1, n + 1):
+        curr_layer = []
+        for idx in range(m):
+            result_var = var_name(layer, idx)
+            curr_layer.append(result_var)
+
+            op = rng.choice(_DAG_OPS)
+
+            # All variables available from any previous layer
+            all_prev_vars = [v for past_layer in layer_vars for v in past_layer]
+
+            # 40% chance to pick from a distant layer (2+ layers back) when deep enough
+            if layer >= 3 and rng.random() < 0.4:
+                distant_vars = [v for past_layer in layer_vars[:-1] for v in past_layer]
+                op1 = rng.choice(distant_vars)
+            else:
+                op1 = rng.choice(layer_vars[-1])
+
+            # Second operand: any previous variable or a small constant
+            if rng.random() < 0.5:
+                op2_var = rng.choice(all_prev_vars)
+                v1, v2 = values[op1], values[op2_var]
+                op2_is_var = True
+            else:
+                op2_var = None
+                v1 = values[op1]
+                v2 = rng.randint(1, 5)
+                op2_is_var = False
+
+            if op == "+":   result = v1 + v2
+            elif op == "-": result = v1 - v2
+
+            values[result_var] = result
+            all_steps.append((result_var, op, op1, op2_var, v2, op2_is_var))
+
+        layer_vars.append(curr_layer)
+
+    # Query from final layer
+    query_var = rng.choice(layer_vars[-1])
+    correct_value = values[query_var]
+
+    # MC options
+    all_values = list(set(values.values()))
+    wrong_values = [v for v in all_values if v != correct_value]
+    for delta in [1, -1, 2, -2, 3, -3, 5, 10, -5, -10]:
+        if len(wrong_values) >= 3:
+            break
+        c = correct_value + delta
+        if c not in wrong_values and c != correct_value:
+            wrong_values.append(c)
+    wrong_chosen = rng.sample(wrong_values, 3)
+    option_values = [correct_value] + wrong_chosen
+    rng.shuffle(option_values)
+    labels = ["A", "B", "C", "D"]
+    options = dict(zip(labels, option_values))
+    correct_label = next(lbl for lbl, val in options.items() if val == correct_value)
+
+    # Build prompt
+    lines = [
+        f"DAG arithmetic computation ({m} variables wide, {n} layers deep)",
+        "",
+        "Input variables:",
+    ]
+    for v in layer_vars[0]:
+        lines.append(f"  {v} = {values[v]}")
+    lines.append("")
+    lines.append("Computation steps:")
+
+    step_num = 1
+    for layer in range(1, n + 1):
+        lines.append(f"\n  Layer {layer}:")
+        for idx in range(m):
+            result_var, op, op1, op2_var, const, op2_is_var = all_steps[(layer - 1) * m + idx]
+            expr = f"{op1} {op} {op2_var}" if op2_is_var else f"{op1} {op} {const}"
+            lines.append(f"  Step {step_num:>3}: {result_var} = {expr}")
+            step_num += 1
+
+    lines.append("")
+    lines.append(f"What is the value of {query_var} after all computations?")
+    lines.append("")
+    lines.append("### Options")
+    for lbl in labels:
+        lines.append(f"{lbl}) {options[lbl]}")
+
+    return {
+        "prompt": "\n".join(lines),
+        "correct_option": correct_label,
+        "option_A": str(options["A"]),
+        "option_B": str(options["B"]),
+        "option_C": str(options["C"]),
+        "option_D": str(options["D"]),
+        "metadata": {
+            "m": m,
+            "n": n,
+            "width": m,
+            "depth": n,
+            "total_steps": m * n,
+            "query_variable": query_var,
+            "correct_value": correct_value,
+        },
+    }
 # ============================================================================
 # Registry
 # ============================================================================
@@ -737,6 +898,11 @@ _REGISTRY: dict[str, TaskTemplate] = {
     name="dyck",
     system_prompt=_DYCK_SYSTEM_PROMPT,
     _generator=_dyck_generator,
+    ),
+    "dag_arithmetic": TaskTemplate(
+        name="dag_arithmetic",
+        system_prompt=_DAG_SYSTEM_PROMPT,
+        _generator=_dag_generator,
     ),
 }
 
