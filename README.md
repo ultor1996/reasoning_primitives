@@ -148,6 +148,25 @@ python generator.py \
 > With 40% probability, nodes reference variables from non-adjacent earlier layers,
 > meaning a computation in layer 9 may depend on a value from layer 2 — the model must
 > hold many intermediate values in memory simultaneously rather than just the previous layer.
+>
+> **Difficulty knobs** (tunable in `_dag_generator` in `templates.py`):
+> - `op1` distant-layer probability (default `0.4`): controls how often the first operand
+>   references a non-adjacent layer. Higher = more long-range dependencies = harder.
+>   Range: `0.0` (always previous layer, easiest) to `1.0` (always distant, hardest).
+> - `op2` variable probability (default `0.5`): controls how often the second operand is
+>   a variable vs a small constant (1–5). Higher = more variable references = harder.
+>   Range: `0.0` (always constant) to `1.0` (always a variable from any previous layer).
+>
+> Example — harder task (more cross-layer dependencies):
+> ```python
+> if layer >= 3 and rng.random() < 0.6:   # op1: 60% distant
+> if rng.random() < 0.7:                  # op2: 70% variable
+> ```
+> Example — easier task (more linear flow):
+> ```python
+> if layer >= 3 and rng.random() < 0.2:   # op1: 20% distant
+> if rng.random() < 0.3:                  # op2: 30% variable
+> ```
 
 **All options:**
 
