@@ -32,10 +32,14 @@ def check_file(path: str, tokenizer, sample_m_values: list[int] | None = None) -
         samples = [s for s in data if s.get("m") == m_val and s.get("n") == n_val]
         if not samples:
             continue
-        prompt = samples[0]["prompt"]
-        tokens = tokenizer(prompt, return_tensors="pt")
+        sample = samples[0]
+        system_prompt = sample.get("system_prompt", "")
+        prompt = sample["prompt"]
+        full_text = system_prompt + "\n" + prompt if system_prompt else prompt
+        tokens = tokenizer(full_text, return_tensors="pt")
         n_tokens = tokens.input_ids.shape[1]
-        print(f"  m={m_val:<6} n={n_val:<6} tokens: {n_tokens}")
+        shot = sample.get("shot", "zero")
+        print(f"  m={m_val:<6} n={n_val:<6} tokens: {n_tokens}  (shot={shot})")
 
 
 def main():
