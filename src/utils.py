@@ -51,7 +51,7 @@ def normalize_answer(raw_answer) -> str | None:
     if s in {"A", "B", "C", "D"}:
         return s
 
-    m = re.fullmatch(r"([ABCD])\)\s*.*", s)
+    m = re.fullmatch(r"([ABCD])\)\s*.*", s, re.DOTALL)
     if m:
         return m.group(1)
 
