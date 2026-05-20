@@ -62,18 +62,44 @@ def normalize_answer(raw_answer) -> str | None:
 # JSON extraction from raw generation
 # ---------------------------------------------------------------------------
 
+# def extract_json(raw_output: str):
+#     """
+#     Try to parse / repair a JSON object from raw model output.
+
+#     Uses json_repair (must be installed) so clean JSON is also handled.
+
+#     Returns
+#     -------
+#     (parsed : dict | None, was_repaired : bool, error : str | None)
+#     """
+#     try:
+#         from json_repair import repair_json  # optional dependency
+#         result = repair_json(raw_output, return_objects=True)
+#         if isinstance(result, dict):
+#             return result, False, None
+#         if isinstance(result, list):
+#             for item in result:
+#                 if isinstance(item, dict) and any(
+#                     k in item for k in ("answer", "Answer", "ANSWER")
+#                 ):
+#                     return item, True, None
+#             if result and isinstance(result[0], dict):
+#                 return result[0], True, None
+#         return None, True, f"Unexpected repair_json return type: {type(result)}"
+#     except ImportError:
+#         pass
+
+#     # Fallback: simple regex scan for {...}
+#     for m in re.finditer(r"\{[^{}]*\}", raw_output, re.DOTALL):
+#         try:
+#             return json.loads(m.group()), False, None
+#         except json.JSONDecodeError:
+#             pass
+#     return None, True, "No valid JSON found"
+
 def extract_json(raw_output: str):
-    """
-    Try to parse / repair a JSON object from raw model output.
-
-    Uses json_repair (must be installed) so clean JSON is also handled.
-
-    Returns
-    -------
-    (parsed : dict | None, was_repaired : bool, error : str | None)
-    """
     try:
-        from json_repair import repair_json  # optional dependency
+        from json_repair import repair_json
         result = repair_json(raw_output, return_objects=True)
         if isinstance(result, dict):
             return result, False, None
@@ -87,6 +113,10 @@ def extract_json(raw_output: str):
                 return result[0], True, None
         return None, True, f"Unexpected repair_json return type: {type(result)}"
     except ImportError:
+        pass
+    except (ValueError, RecursionError):
+        # json_repair exceeded recursion depth on deeply nested/long output
+        # fall through to regex fallback below
         pass
 
     # Fallback: simple regex scan for {...}

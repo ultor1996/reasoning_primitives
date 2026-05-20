@@ -118,19 +118,28 @@ def compute_accuracy(samples: list[dict]) -> dict:
                 n_correct += 1
                 per_m_n[mn_key]["n_correct"] += 1
 
+    # for key, d in per_m_n.items():
+    #     d["accuracy"] = (
+    #         round(d["n_correct"] / d["n_scored"], 4)
+    #         if d["n_scored"] > 0 else None
+    #     )
+    #     if d["accuracy"] is not None and d["n_total"] > 0:
+    #         d["parsed_weighted_accuracy"] = round(
+    #             d["accuracy"] * (d["n_scored"] / d["n_total"]), 4
+    #         )
+    #     else:
+    #         d["parsed_weighted_accuracy"] = None
     for key, d in per_m_n.items():
         d["accuracy"] = (
             round(d["n_correct"] / d["n_scored"], 4)
-            if d["n_scored"] > 0 else None
+            if d["n_scored"] > 0 else 0.0
         )
-        if d["accuracy"] is not None and d["n_total"] > 0:
-            d["parsed_weighted_accuracy"] = round(
-                d["accuracy"] * (d["n_scored"] / d["n_total"]), 4
-            )
-        else:
-            d["parsed_weighted_accuracy"] = None
+        d["parsed_weighted_accuracy"] = round(
+            d["accuracy"] * (d["n_scored"] / d["n_total"]), 4
+        ) if d["n_total"] > 0 else 0.0
 
-    overall_acc = round(n_correct / n_scored, 4) if n_scored > 0 else None
+    # overall_acc = round(n_correct / n_scored, 4) if n_scored > 0 else None
+    overall_acc = round(n_correct / n_scored, 4) if n_scored > 0 else 0.0
 
     pwa_values = [
         d["parsed_weighted_accuracy"]
